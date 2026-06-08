@@ -100,19 +100,28 @@ def _stub_node(phase: str):
 
 
 def _route_after_validation(state: RepoPilotState) -> str:
-    """Pure routing decision — does NOT mutate state.
+    """Pure routing decision — validation is ADVISORY, so the run always
+    proceeds to documentation → PR.
 
-    LangGraph does not reliably persist mutations made inside an edge function,
-    so the repair counter is incremented in the reflection NODE instead. Here we
-    only read it to decide pass / repair / abort.
+    The repair loop only engages when validation surfaced findings AND we
+    haven't already retried — and even then only for tiers where a retry could
+    help (i.e. real test/lint failures, not 'not_validated'). Otherwise we pass.
     """
-    val = state.get("validation_results")
-    if val is None or val.get("passed", True):
+    val = state.get("validation_results") or {}
+    severity = val.get("severity", "not_validated")
+
+    # Clean, unverifiable, or already retried → proceed to documentation.
+    if severity in ("pass", "not_validated"):
         return "pass"
     if state.get("repair_attempts", 0) >= MAX_REPAIR_ATTEMPTS:
-        logger.warning("validation.max_repairs_reached", run_id=state["run_id"])
-        return "abort"
-    return "repair"
+        logger.info("validation.max_repairs_reached", run_id=state.get("run_id"))
+        return "pass"  # advisory: ship anyway with findings noted in the PR
+
+    # severity == "warnings" with a real, fixable failure → one repair attempt.
+    validated_with = val.get("validated_with", "none")
+    if validated_with in ("tests", "lint"):
+        return "repair"
+    return "pass"  # syntax-only findings: note them, don't loop
 
 
 def build_graph(phases: list[str] | None = None) -> Any:

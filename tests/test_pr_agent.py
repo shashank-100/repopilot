@@ -13,10 +13,14 @@ def _make_state(tmp_path, passed=True):
     state = create_run("add rate limiting middleware", str(tmp_path))
     state["modified_files"] = [str(tmp_path / "middleware.py"), str(tmp_path / "main.py")]
     state["validation_results"] = {
+        "severity": "pass" if passed else "warnings",
+        "validated_with": "tests",
         "passed": passed,
+        "summary": "Validated via tests — clean" if passed else "Validated via tests — 1 finding",
         "pytest_output": "5 passed",
         "mypy_output": "Success",
         "ruff_output": "",
+        "findings": [] if passed else ["pytest failed"],
         "errors": [] if passed else ["pytest failed"],
     }
     state["execution_plan"] = {
@@ -86,7 +90,7 @@ def test_tests_executed_includes_standard_suite(tmp_path):
     agent._llm.with_structured_output.return_value.invoke.return_value = _fake_pr()
     result = agent.run(state)
 
-    assert "pytest (repo test suite)" in result["generated_pr"]["tests_executed"]
+    assert "Ran the repository test suite" in result["generated_pr"]["tests_executed"]
     delete_run(state["run_id"])
 
 

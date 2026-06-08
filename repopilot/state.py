@@ -66,11 +66,18 @@ class ToolCall(TypedDict):
 
 
 class ValidationResult(TypedDict):
-    passed: bool
+    # Advisory only — never blocks the run.
+    # severity: "pass" | "warnings" | "not_validated"
+    severity: str
+    # How validation was performed: "tests" | "lint" | "syntax" | "none"
+    validated_with: str
+    passed: bool          # kept for back-compat; mirrors severity == "pass"
+    summary: str          # human-readable one-liner
     pytest_output: str
     mypy_output: str
     ruff_output: str
-    errors: list[str]
+    findings: list[str]   # advisory notes (renamed from "errors")
+    errors: list[str]     # back-compat alias of findings
 
 
 class GeneratedPR(TypedDict):

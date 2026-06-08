@@ -76,11 +76,17 @@ class PRAgent:
             s for s in plan.get("steps", []) if s.get("status") == "failed"
         ]
 
+        # Honestly describe how the change was validated (advisory tiers).
+        validated_with = val.get("validated_with", "none")
         tests_run: list[str] = []
-        if val:
-            tests_run.append("pytest (repo test suite)")
-            tests_run.append("mypy (static type checking)")
-            tests_run.append("ruff (lint)")
+        if validated_with == "tests":
+            tests_run.append("Ran the repository test suite")
+        elif validated_with == "lint":
+            tests_run.append("Static analysis (lint / type check)")
+        elif validated_with == "syntax":
+            tests_run.append("Syntax check of changed files")
+        else:
+            tests_run.append("No automated tests available for this repo — change is unverified")
 
         changed_file_names = [Path(p).name for p in modified]
 
@@ -99,8 +105,9 @@ class PRAgent:
             )
             + f"\n\nMigration notes:\n"
             + "\n".join(f"  - {n}" for n in migration_notes)
-            + f"\n\nValidation: {'PASSED' if val.get('passed') else 'FAILED'}\n"
-            f"Repair attempts: {state.get('repair_attempts', 0)}\n\n"
+            + f"\n\nValidation ({validated_with}): {val.get('summary', 'n/a')}\n"
+            + (("Findings:\n" + "\n".join(f"  - {x}" for x in val.get('findings', []))) if val.get('findings') else "")
+            + f"\nRepair attempts: {state.get('repair_attempts', 0)}\n\n"
             "Write a complete, honest PR description. "
             "If steps failed, note that in risks. "
             "The rollback_plan should reference the specific files changed."
