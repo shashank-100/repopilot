@@ -226,3 +226,23 @@ def test_workflow_node_is_not_stub():
     # The node should exist and not raise on inspection
     node_names = list(graph.get_graph().nodes)
     assert "implementation" in node_names
+
+
+def test_step_result_coerces_stringified_edits():
+    """Haiku sometimes returns edits as a JSON string — must coerce to list."""
+    import json
+    edits_str = json.dumps([{"path": "/a.py", "content": "x", "is_new": True}])
+    r = _StepResult(summary="s", edits=edits_str, observations="[]")
+    assert len(r.edits) == 1
+    assert r.edits[0].path == "/a.py"
+
+
+def test_step_result_normal_list_unaffected():
+    r = _StepResult(summary="s", edits=[{"path": "/b.py", "content": "y"}])
+    assert len(r.edits) == 1
+    assert r.edits[0].path == "/b.py"
+
+
+def test_step_result_unparseable_string_yields_empty():
+    r = _StepResult(summary="s", edits="not json at all")
+    assert r.edits == []

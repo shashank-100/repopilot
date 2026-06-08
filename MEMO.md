@@ -31,6 +31,14 @@ A 9-agent LangGraph pipeline behind a FastAPI service, with a Next.js dashboard.
   `ArchitectureContext` feeds Planning, whose `execution_plan` feeds Implementation.
 - **Persistence** — transparent in-memory ↔ PostgreSQL switch on `DATABASE_URL`,
   verified against live Supabase (a run survives a full API restart).
+- **GitHub-native, end-to-end** — paste a GitHub URL and the backend clones it
+  (`repopilot/api/routers/runs.py::_clone_repo`); on completion it opens a **real
+  pull request** via a GitHub App installation token (`repopilot/github_auth.py`,
+  `repopilot/github_pr.py`). Proven: PRs auto-opened on two live repos
+  (`shashank-100/CrowdDJ#1` — 6 files: validation, error-handler, routes, health check).
+- **Deployed** — API on Railway, dashboard on Vercel, Postgres on Supabase (via the
+  IPv4 transaction pooler, since Supabase's direct host is IPv6-only and Railway
+  egresses IPv4 — a non-obvious failure I had to debug live).
 
 ## What I cut
 

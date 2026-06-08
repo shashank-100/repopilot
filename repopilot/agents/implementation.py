@@ -17,8 +17,10 @@ from typing import Any
 import structlog
 from langchain_core.language_models import BaseChatModel
 
+import json
+
 from repopilot.llm import default_llm, invoke_with_retry
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from repopilot.state import RepoPilotState
 from repopilot.tools.base import load_all_tools, registry
@@ -40,6 +42,38 @@ class _StepResult(BaseModel):
     summary: str = Field(description="One sentence describing what was done")
     edits: list[_FileEdit] = Field(description="Files to create or overwrite")
     observations: list[str] = Field(default_factory=list, description="Noteworthy findings")
+
+    @field_validator("edits", mode="before")
+    @classmethod
+    def _coerce_edits(cls, v: object) -> object:
+        """Haiku sometimes returns `edits` as a JSON STRING instead of a list.
+
+        Parse it back into a list so the step's file edits aren't silently
+        dropped (see the CrowdDJ run where step 9 lost base.js). Pydantic then
+        validates the parsed items against _FileEdit as normal.
+        """
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                if isinstance(parsed, dict):
+                    return [parsed]
+            except (json.JSONDecodeError, ValueError):
+                return []  # unparseable → no edits, but don't crash the step
+        return v
+
+    @field_validator("observations", mode="before")
+    @classmethod
+    def _coerce_obs(cls, v: object) -> object:
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except (json.JSONDecodeError, ValueError):
+                return [v]
+        return v
 
 
 class ImplementationAgent:
