@@ -126,66 +126,72 @@ def get_token(owner: str, repo: str) -> str | None:
     return None
 
 
-def list_accessible_repos() -> list[dict[str, str]]:
+# Cache the repo list — it rarely changes and the lookup is expensive.
+_repos_cache: dict[str, object] = {"repos": [], "at": 0.0}
+_REPOS_TTL = 300  # seconds
+
+
+def list_accessible_repos(max_repos: int = 100) -> list[dict[str, str]]:
     """List repos the GitHub App is installed on (or the PAT can see).
 
-    Returns a list of {full_name, default_branch, private} dicts. Empty if no
-    credentials are configured.
+    Returns up to `max_repos` {full_name, default_branch, private} dicts, most
+    recently updated first. Cached for 5 min to stay fast on a hosted backend.
     """
+    now = time.time()
+    cached = _repos_cache.get("repos")
+    if cached and (now - float(_repos_cache.get("at", 0))) < _REPOS_TTL:
+        return cached  # type: ignore[return-value]
+
     app_jwt = _app_jwt()
     repos: list[dict[str, str]] = []
 
     if app_jwt:
-        # Enumerate installations → mint token → list its repos
         r = httpx.get(
             f"{_GH_API}/app/installations",
             headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
-            timeout=20,
+            timeout=15,
         )
         if r.status_code == 200:
             for inst in r.json():
+                if len(repos) >= max_repos:
+                    break
                 tr = httpx.post(
                     f"{_GH_API}/app/installations/{inst['id']}/access_tokens",
                     headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
-                    timeout=20,
+                    timeout=15,
                 )
                 if tr.status_code != 201:
                     continue
                 tok = tr.json()["token"]
-                page = 1
-                while True:
-                    rr = httpx.get(
-                        f"{_GH_API}/installation/repositories?per_page=100&page={page}",
-                        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"},
-                        timeout=20,
-                    )
-                    if rr.status_code != 200:
-                        break
-                    batch = rr.json().get("repositories", [])
-                    for x in batch:
+                # One page only, sorted by most-recently-updated — fast + relevant.
+                rr = httpx.get(
+                    f"{_GH_API}/installation/repositories?per_page={max_repos}",
+                    headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"},
+                    timeout=15,
+                )
+                if rr.status_code == 200:
+                    for x in rr.json().get("repositories", []):
                         repos.append({
                             "full_name": x["full_name"],
                             "default_branch": x.get("default_branch", "main"),
                             "private": x.get("private", False),
                         })
-                    if len(batch) < 100:
-                        break
-                    page += 1
-        return repos
+    else:
+        pat = os.getenv("GITHUB_TOKEN")
+        if pat:
+            rr = httpx.get(
+                f"{_GH_API}/user/repos?per_page={max_repos}&sort=updated",
+                headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
+                timeout=15,
+            )
+            if rr.status_code == 200:
+                for x in rr.json():
+                    repos.append({
+                        "full_name": x["full_name"],
+                        "default_branch": x.get("default_branch", "main"),
+                        "private": x.get("private", False),
+                    })
 
-    # PAT fallback
-    pat = os.getenv("GITHUB_TOKEN")
-    if pat:
-        rr = httpx.get(
-            f"{_GH_API}/user/repos?per_page=100&sort=updated",
-            headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
-            timeout=20,
-        )
-        if rr.status_code == 200:
-            for x in rr.json():
-                repos.append({
-                    "full_name": x["full_name"],
-                    "default_branch": x.get("default_branch", "main"),
-                    "private": x.get("private", False),
-                })
+    _repos_cache["repos"] = repos
+    _repos_cache["at"] = now
     return repos
