@@ -30,6 +30,7 @@ dependencies = [
     "asyncpg>=0.31.0",
     "alembic>=1.18.4",
     "slowapi>=0.1.9",
+    "pyjwt[crypto]>=2.13.0",
 ]
 
 [project.optional-dependencies]

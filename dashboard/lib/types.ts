@@ -34,6 +34,7 @@ export interface ValidationResult {
 export interface GeneratedPR {
   title: string; summary: string; changes: string[];
   tests_executed: string[]; risks: string[]; rollback_plan: string;
+  url?: string;  // GitHub PR URL when a real PR was opened
 }
 export interface ReflectionReport {
   failure_summary: string; root_cause: string;

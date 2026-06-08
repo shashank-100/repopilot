@@ -97,6 +97,14 @@ async def _run_graph(run_id: str) -> None:
             "llm_calls": after["llm_calls"] - tokens_before["llm_calls"],
         }
         update_run(final)
+
+        # Open a real GitHub PR if the run modified a GitHub clone and a
+        # GITHUB_TOKEN is available. No-op otherwise (keeps the PR summary).
+        if final.get("current_phase") == "pr_generation":
+            from repopilot.github_pr import maybe_open_pr
+            final = await asyncio.to_thread(maybe_open_pr, final)
+            update_run(final)
+
         logger.info(
             "run.complete",
             run_id=run_id,
