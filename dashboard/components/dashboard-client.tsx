@@ -707,17 +707,24 @@ function ReportPanel({ runState, onClose }: { runState: RunState | null; onClose
 
 function NewRunModal({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   const [obj, setObj] = useState("");
-  const [repo, setRepo] = useState("");
+  // Pre-fill a public GitHub repo so the hosted demo works out of the box.
+  const [repo, setRepo] = useState("https://github.com/tiangolo/fastapi");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!obj.trim() || !repo.trim()) return;
+    if (!obj.trim()) { setErr("Objective is required."); return; }
+    if (!repo.trim()) { setErr("Repository is required."); return; }
     setLoading(true); setErr("");
-    try { const { run_id } = await createRun(obj.trim(), repo.trim()); onCreated(run_id); }
-    catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
-    finally { setLoading(false); }
+    try {
+      const { run_id } = await createRun(obj.trim(), repo.trim());
+      onCreated(run_id);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to start run — is the API reachable?");
+    } finally {
+      setLoading(false);
+    }
   }
 
   const inp: React.CSSProperties = {
@@ -735,13 +742,14 @@ function NewRunModal({ onCreated, onClose }: { onCreated: (id: string) => void; 
           <input value={obj} onChange={e => setObj(e.target.value)} placeholder="e.g. migrate gradient text to #317CFF" style={inp} autoFocus />
         </label>
         <label style={{ display: "block", marginBottom: 18 }}>
-          <span style={{ fontSize: 12, fontWeight: 500, color: C.textMid, display: "block", marginBottom: 5 }}>Repository Path</span>
-          <input value={repo} onChange={e => setRepo(e.target.value)} placeholder="/absolute/path/to/repo" style={inp} />
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.textMid, display: "block", marginBottom: 5 }}>GitHub Repo or Path</span>
+          <input value={repo} onChange={e => setRepo(e.target.value)} placeholder="https://github.com/owner/repo" style={inp} />
+          <span style={{ fontSize: 11, color: C.textDim, display: "block", marginTop: 4 }}>Paste a public GitHub URL — it'll be cloned automatically.</span>
         </label>
         {err && <p style={{ color: C.red, fontSize: 12, marginBottom: 10 }}>{err}</p>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
           <button type="button" onClick={onClose} style={{ padding: "6px 14px", border: `1px solid ${C.border}`, borderRadius: 6, background: C.bg, cursor: "pointer", fontSize: 12, fontFamily: "inherit", color: C.textMid }}>Cancel</button>
-          <button type="submit" disabled={loading || !obj.trim() || !repo.trim()} style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: "#2da44e", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit", opacity: loading ? 0.6 : 1 }}>
+          <button type="submit" disabled={loading} style={{ padding: "6px 14px", border: "none", borderRadius: 6, background: "#2da44e", color: "#fff", cursor: loading ? "default" : "pointer", fontSize: 12, fontWeight: 500, fontFamily: "inherit", opacity: loading ? 0.6 : 1 }}>
             {loading ? "Launching…" : "Launch →"}
           </button>
         </div>

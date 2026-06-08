@@ -2,6 +2,7 @@ import type { Phase } from "@/lib/types";
 
 const CONFIG: Record<Phase, { label: string; bg: string; color: string; border: string }> = {
   created:        { label: "Created",        bg: "rgba(110,118,129,0.1)", color: "#8b949e", border: "rgba(110,118,129,0.3)" },
+  cloning:        { label: "Cloning",        bg: "rgba(110,118,129,0.1)", color: "#8b949e", border: "rgba(110,118,129,0.3)" },
   discovery:      { label: "Discovery",      bg: "rgba(88,166,255,0.1)",  color: "#79c0ff", border: "rgba(88,166,255,0.3)" },
   knowledge:      { label: "Knowledge",      bg: "rgba(88,166,255,0.1)",  color: "#79c0ff", border: "rgba(88,166,255,0.3)" },
   architecture:   { label: "Architecture",   bg: "rgba(188,140,255,0.1)", color: "#d2a8ff", border: "rgba(188,140,255,0.3)" },

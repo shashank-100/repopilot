@@ -1,5 +1,6 @@
 export type Phase =
   | "created"
+  | "cloning"
   | "discovery"
   | "knowledge"
   | "architecture"
