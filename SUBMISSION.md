@@ -33,6 +33,7 @@ and **opens a real pull request**.
 
 ## Deliverables in this repo
 
+- `ARCHITECTURE.md` — full system design (diagram, pipeline, data flow)
 - `MEMO.md` — one-pager (what built / cut / more time / a defended design decision)
 - `benchmark_report.md` — eval harness output (100% on the sampled tasks)
 - `submission/session-trace.jsonl` — full Claude Code session trace (native export)
