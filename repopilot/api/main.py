@@ -24,9 +24,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_tracing()
     import os
     if os.getenv("DATABASE_URL"):
-        from repopilot.db.init_db import init_db_async
-        await init_db_async()
-        logger.info("repopilot.db.ready")
+        # Don't let a slow/unreachable DB block startup — the app should still
+        # serve /health so the platform's healthcheck passes. Runs init in the
+        # background with a timeout; falls back to in-memory if it fails.
+        import asyncio
+
+        async def _try_init_db() -> None:
+            try:
+                from repopilot.db.init_db import init_db_async
+                await asyncio.wait_for(init_db_async(), timeout=20)
+                logger.info("repopilot.db.ready")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("repopilot.db.init_failed", error=str(exc))
+
+        asyncio.create_task(_try_init_db())
     logger.info("repopilot.startup", version="0.1.0")
     yield
     logger.info("repopilot.shutdown")
