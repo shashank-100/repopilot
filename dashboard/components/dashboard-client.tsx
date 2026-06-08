@@ -36,108 +36,8 @@ const C = {
 };
 
 // ─── demo data ────────────────────────────────────────────────────────────────
-const DEMO_SESSIONS = [
-  {
-    id: "demo-1",
-    title: "Migrate all gradient text to #317CFF",
-    time: "1 hour ago",
-    prs: 2,
-    status: "open" as const,
-  },
-];
+const DEMO_SESSIONS: { id: string; title: string; time: string; prs: number; status: "open" | "merged" }[] = [];
 
-const DEMO_MESSAGES = [
-  {
-    id: "m1",
-    type: "user" as const,
-    text: "Migrate all gradient text to #317CFF in both repos, then test",
-    avatar: "S",
-  },
-  {
-    id: "m2",
-    type: "agent" as const,
-    steps: [
-      { id: "s1", label: "Used playbook: Test", collapsed: true },
-    ],
-    text: "I'll migrate all gradient text to #317CFF in both cognition-website and devin-website repos, then test the changes. Starting now.",
-  },
-  {
-    id: "m3",
-    type: "worked" as const,
-    duration: "4m 13s",
-    adds: 25,
-    removes: 131,
-  },
-  {
-    id: "m4",
-    type: "pr" as const,
-    repo: "cognition/cognition-website",
-    prNum: 167,
-    status: "open" as const,
-    hash: "devin/USA-938-1765942251",
-    base: "main",
-    files: 6,
-    adds: 25,
-    removes: 123,
-  },
-  {
-    id: "m5",
-    type: "pr" as const,
-    repo: "cognition/devin-website",
-    prNum: 357,
-    status: "open" as const,
-    hash: "devin/USA-938-1765942251",
-    base: "main",
-    files: 2,
-    adds: 6,
-    removes: 8,
-  },
-  {
-    id: "m6",
-    type: "worked" as const,
-    duration: "5m 33s",
-    adds: null,
-    removes: null,
-  },
-  {
-    id: "m7",
-    type: "agent" as const,
-    steps: [],
-    text: "Done! All gradient text migrated to #317CFF and tested across both repos. Full report attached.",
-    attachment: "test_gradient_migration.md",
-  },
-  {
-    id: "m8",
-    type: "status" as const,
-    text: "Devin is ready for instructions",
-  },
-];
-
-const DEMO_REPORT = {
-  filename: "test_gradient_migration.md",
-  title: "Test Report: Migrate Gradient Text",
-  prs: [
-    { repo: "devin-website", num: 167 },
-    { repo: "cognition-website", num: 167 },
-  ],
-  summary: "All gradient text background: linear-gradient(...) replaced with solid color: #317CFF across both repos. Tested by comparing production sites (gradient) vs localhost dev servers (solid blue).",
-  sections: [
-    {
-      title: "Homepage",
-      items: [
-        { label: "Before on Production", content: "Secure,\nPrivate", sub: "Gradient on text", gradient: true },
-        { label: "After on Localhost", content: "Secure,\nPrivate", sub: "Uniform solid blue", gradient: false },
-      ],
-    },
-    {
-      title: "Footer",
-      items: [
-        { label: "Before on Production", content: "Secure,\nPrivate", sub: "Gradient on text", gradient: true },
-        { label: "After on Localhost", content: "Secure,\nPrivate", sub: "Uniform solid blue", gradient: false },
-      ],
-    },
-  ],
-};
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -175,8 +75,6 @@ function Sidebar({ selectedSession, onSelect, onNew, liveRuns = [] }: {
   onNew: () => void;
   liveRuns?: RunState[];
 }) {
-  const navItems = ["Sessions", "Ask", "Wiki", "Review"];
-  const [activeNav, setActiveNav] = useState("Sessions");
 
   return (
     <aside style={{
@@ -204,9 +102,6 @@ function Sidebar({ selectedSession, onSelect, onNew, liveRuns = [] }: {
             </svg>
           </div>
           <span style={{ fontSize: 13, fontWeight: 650, color: C.text, letterSpacing: "-0.01em" }}>RepoPilot</span>
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ marginTop: 1 }}>
-            <path d="M2.5 4l2.5 2.5L7.5 4" stroke={C.textDim} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
         </div>
         <button onClick={onNew} style={{
           border: `1px solid ${C.borderMid}`, background: C.bg,
@@ -220,27 +115,13 @@ function Sidebar({ selectedSession, onSelect, onNew, liveRuns = [] }: {
         >+ New</button>
       </div>
 
-      {/* nav */}
-      <div style={{ padding: "5px 7px 4px", borderBottom: `1px solid ${C.border}` }}>
-        {navItems.map(item => (
-          <button key={item} onClick={() => setActiveNav(item)} style={{
-            width: "100%", textAlign: "left", padding: "5px 9px",
-            border: "none", borderRadius: 7,
-            background: activeNav === item ? C.bg : "transparent",
-            boxShadow: activeNav === item ? C.shadow : "none",
-            cursor: "pointer", fontFamily: "inherit",
-            fontSize: 13, fontWeight: activeNav === item ? 500 : 400,
-            color: activeNav === item ? C.text : C.textMid,
-            transition: "all 0.1s",
-          }}>
-            {item}
-          </button>
-        ))}
-      </div>
-
-      {/* recent */}
+      {/* runs list */}
       <div style={{ padding: "8px 7px 6px", flex: 1, overflowY: "auto" }}>
-        <p style={{ fontSize: 10.5, color: C.textDim, fontWeight: 600, padding: "0 7px 5px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Recent</p>
+        <p style={{ fontSize: 10.5, color: C.textDim, fontWeight: 600, padding: "0 7px 5px", textTransform: "uppercase", letterSpacing: "0.07em" }}>Runs</p>
+
+        {liveRuns.length === 0 && (
+          <p style={{ padding: "8px 9px", fontSize: 12, color: C.textDim }}>No runs yet</p>
+        )}
 
         {/* live runs from backend */}
         {liveRuns.slice().reverse().map(run => {
@@ -308,18 +189,6 @@ function Sidebar({ selectedSession, onSelect, onNew, liveRuns = [] }: {
         })}
       </div>
 
-      {/* settings */}
-      <div style={{ borderTop: `1px solid ${C.border}`, padding: "9px 14px" }}>
-        <button style={{ display: "flex", alignItems: "center", gap: 7, border: "none", background: "none", cursor: "pointer", fontSize: 12, color: C.textMid, fontFamily: "inherit" }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = C.text}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = C.textMid}
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-            <circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
-          </svg>
-          Settings
-        </button>
-      </div>
     </aside>
   );
 }
@@ -428,7 +297,7 @@ function LiveThread({ run }: { run: RunState }) {
 
 // ─── chat thread ──────────────────────────────────────────────────────────────
 
-function ChatThread({ runState }: { runState: RunState | null }) {
+function ChatThread({ runState, onNewRun }: { runState: RunState | null; onNewRun: () => void }) {
   const title = runState ? runState.objective : "Migrate gradient text";
   const runId = runState ? runState.run_id.slice(0, 7) : "357";
 
@@ -447,51 +316,20 @@ function ChatThread({ runState }: { runState: RunState | null }) {
         </div>
       </div>
 
-      {/* messages — live run vs demo */}
+      {/* messages — live run, or empty state */}
       {runState ? (
         <LiveThread run={runState} />
       ) : (
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 24px 12px", background: C.bg }}>
-          {DEMO_MESSAGES.map(msg => {
-            if (msg.type === "user") return (
-              <div key={msg.id} style={{ display: "flex", justifyContent: "flex-end", marginBottom: 20, gap: 9, alignItems: "flex-end" }}>
-                <div style={{ maxWidth: "68%", background: C.bgSidebar, border: `1px solid ${C.border}`, borderRadius: "16px 16px 4px 16px", padding: "10px 15px", fontSize: 13, color: C.text, lineHeight: 1.55, boxShadow: C.shadow }}>{msg.text}</div>
-                <div style={{ width: 29, height: 29, borderRadius: "50%", background: "linear-gradient(135deg,#4f46e5,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0, boxShadow: "0 2px 6px rgba(79,70,229,0.35)" }}>{msg.avatar}</div>
-              </div>
-            );
-            if (msg.type === "agent") return (
-              <div key={msg.id} style={{ display: "flex", gap: 11, marginBottom: 18, alignItems: "flex-start" }}>
-                <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: "linear-gradient(135deg,#18181b,#3f3f46)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, boxShadow: "0 2px 5px rgba(0,0,0,0.18)" }}>R</div>
-                <div style={{ flex: 1, paddingTop: 2 }}>
-                  {msg.steps?.map(step => <CollapsibleStep key={step.id} label={step.label} />)}
-                  <p style={{ fontSize: 13, color: C.text, lineHeight: 1.65 }}>{msg.text}</p>
-                  {msg.attachment && (
-                    <div style={{ marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6, color: C.blue, fontSize: 12, cursor: "pointer", background: C.blueSoft, borderRadius: 7, padding: "5px 10px", border: `1px solid rgba(37,99,235,0.18)` }}>
-                      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={C.blue} strokeWidth="1.5"><path d="M4 2h6l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M10 2v4h4"/></svg>
-                      <span style={{ fontWeight: 500 }}>{msg.attachment}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-            if (msg.type === "worked") return (
-              <div key={msg.id} style={{ marginLeft: 36, marginBottom: 10 }}>
-                <CollapsibleStep label={`Worked for ${msg.duration}${msg.adds != null ? ` · +${msg.adds}` : ""}${msg.removes != null ? ` · -${msg.removes}` : ""}`} adds={msg.adds ?? undefined} removes={msg.removes ?? undefined} />
-              </div>
-            );
-            if (msg.type === "pr") return (
-              <div key={msg.id} style={{ marginLeft: 36, marginBottom: 10 }}>
-                <PrCard {...msg as any} />
-              </div>
-            );
-            if (msg.type === "status") return (
-              <div key={msg.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, marginLeft: 36 }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill={C.textDim}><circle cx="8" cy="8" r="6" stroke={C.textDim} strokeWidth="1.5" fill="none"/><path d="M8 5v3l2 2" stroke={C.textDim} strokeWidth="1.5" strokeLinecap="round"/></svg>
-                <span style={{ fontSize: 12, color: C.textDim }}>{msg.text}</span>
-              </div>
-            );
-            return null;
-          })}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, background: C.bg, padding: 24 }}>
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,#18181b,#3f3f46)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 24, fontWeight: 700, boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>R</div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Start an autonomous run</p>
+          <p style={{ fontSize: 13, color: C.textDim, textAlign: "center", maxWidth: 360, lineHeight: 1.6 }}>
+            Paste a GitHub repo and an objective. RepoPilot will clone it, plan the change,
+            edit the code, validate, and open a pull request.
+          </p>
+          <button onClick={onNewRun} style={{ marginTop: 4, padding: "8px 18px", background: "#2da44e", border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+            + New Run
+          </button>
         </div>
       )}
 
@@ -585,7 +423,6 @@ function TypingDots() {
 // ─── right panel ──────────────────────────────────────────────────────────────
 
 function ReportPanel({ runState, onClose }: { runState: RunState | null; onClose: () => void }) {
-  const report = DEMO_REPORT;
   const pr = runState?.generated_pr;
 
   return (
@@ -604,7 +441,7 @@ function ReportPanel({ runState, onClose }: { runState: RunState | null; onClose
       }}>
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={C.textDim} strokeWidth="1.4"><path d="M4 2h6l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M10 2v4h4"/></svg>
         <span style={{ fontSize: 12, fontWeight: 500, color: C.text, flex: 1, fontFamily: "ui-monospace,monospace" }}>
-          {pr ? "generated_pr.md" : report.filename}
+          {pr ? "pull_request.md" : "details"}
         </span>
         <button style={{ border: "none", background: "none", cursor: "pointer", color: C.textDim, padding: "2px 3px", borderRadius: 4, fontSize: 12 }}>⧉</button>
         <button style={{ border: "none", background: "none", cursor: "pointer", color: C.textDim, padding: "2px 3px", borderRadius: 4, fontSize: 12 }}>↓</button>
@@ -629,81 +466,55 @@ function ReportPanel({ runState, onClose }: { runState: RunState | null; onClose
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px 20px" }}>
         {pr ? (
-          // Live PR from run
+          // Real PR from the run
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <p style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Test Report</p>
+              <p style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Pull Request</p>
               <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{pr.title}</h2>
+              {pr.url && (
+                <a href={pr.url} target="_blank" rel="noopener noreferrer"
+                  style={{ display: "inline-block", marginTop: 8, fontSize: 12, color: "#fff", background: "#2da44e", borderRadius: 6, padding: "5px 12px", textDecoration: "none", fontWeight: 600 }}>
+                  View on GitHub →
+                </a>
+              )}
             </div>
             <p style={{ fontSize: 13, color: C.textMid, lineHeight: 1.7 }}>{pr.summary}</p>
-            <div>
-              {pr.changes.map((c, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, padding: "3px 0", fontSize: 13, color: C.text }}>
-                  <span style={{ color: C.green }}>+</span>{c}
-                </div>
-              ))}
-            </div>
+            {pr.changes.length > 0 && (
+              <div>
+                <p style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Changes</p>
+                {pr.changes.map((c, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, padding: "3px 0", fontSize: 13, color: C.text }}>
+                    <span style={{ color: C.green }}>+</span>{c}
+                  </div>
+                ))}
+              </div>
+            )}
             {pr.risks.length > 0 && (
               <div style={{ background: "#fffbea", border: `1px solid #fde68a`, borderRadius: 8, padding: 12 }}>
                 <p style={{ fontSize: 11, fontWeight: 600, color: C.yellow, marginBottom: 6 }}>RISKS</p>
                 {pr.risks.map((r, i) => <p key={i} style={{ fontSize: 12, color: C.textMid }}>{r}</p>)}
               </div>
             )}
+            {pr.rollback_plan && (
+              <div>
+                <p style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Rollback</p>
+                <p style={{ fontSize: 12, color: C.textMid, lineHeight: 1.6 }}>{pr.rollback_plan}</p>
+              </div>
+            )}
+          </div>
+        ) : runState ? (
+          // Run selected but no PR yet — show live status
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, color: C.textMid }}>
+            <p style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{runState.objective}</p>
+            <p style={{ fontSize: 12, color: C.textDim }}>Phase: {runState.current_phase.replace(/_/g, " ")}</p>
+            <p style={{ fontSize: 12, color: C.textDim }}>{runState.tool_history.length} tool calls · {runState.modified_files.length} files modified</p>
+            <p style={{ fontSize: 12, color: C.textDim, fontStyle: "italic" }}>The pull request will appear here when the run completes.</p>
           </div>
         ) : (
-          // Demo report
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            <div>
-              <p style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Test Report</p>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, lineHeight: 1.3, marginBottom: 8 }}>{report.title}</h2>
-              <p style={{ fontSize: 13, color: C.textMid }}>
-                PRs:{" "}
-                {report.prs.map((p, i) => (
-                  <span key={i}>
-                    <span style={{ color: C.blue, textDecoration: "underline", cursor: "pointer" }}>{p.repo} #{p.num}</span>
-                    {i < report.prs.length - 1 ? " | " : ""}
-                  </span>
-                ))}
-              </p>
-            </div>
-
-            <p style={{ fontSize: 13, color: C.text, lineHeight: 1.7 }}>{report.summary}</p>
-
-            {report.sections.map(section => (
-              <div key={section.title}>
-                <p style={{ fontSize: 13.5, fontWeight: 600, color: C.text, marginBottom: 10 }}>{section.title}</p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {section.items.map((item, i) => (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                      <p style={{ fontSize: 10.5, color: C.textDim, fontWeight: 500 }}>{item.label}</p>
-                      <div style={{
-                        border: `1px solid ${C.border}`, borderRadius: 10,
-                        padding: "22px 14px", textAlign: "center",
-                        background: item.gradient
-                          ? "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%)"
-                          : "#317CFF",
-                        minHeight: 84,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        boxShadow: item.gradient
-                          ? "0 4px 14px rgba(99,102,241,0.3)"
-                          : "0 4px 14px rgba(49,124,255,0.3)",
-                        transition: "transform 0.15s, box-shadow 0.15s",
-                      }}>
-                        <span style={{
-                          fontSize: 18, fontWeight: 750, color: "#fff",
-                          lineHeight: 1.2, whiteSpace: "pre-line",
-                          textShadow: "0 1px 3px rgba(0,0,0,0.15)",
-                          letterSpacing: "-0.02em",
-                        }}>
-                          {item.content}
-                        </span>
-                      </div>
-                      <p style={{ fontSize: 10.5, color: C.textDim, textAlign: "center" }}>{item.sub}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+          // Nothing selected
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 10, color: C.textDim }}>
+            <svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke={C.textDim} strokeWidth="1.2"><path d="M4 2h6l4 4v9a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M10 2v4h4"/></svg>
+            <p style={{ fontSize: 12.5 }}>Select a run to see its details</p>
           </div>
         )}
       </div>
@@ -839,7 +650,7 @@ export function DashboardClient() {
       />
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <ChatThread runState={selectedRun} />
+        <ChatThread runState={selectedRun} onNewRun={() => setShowModal(true)} />
       </div>
 
       {reportOpen && <ReportPanel runState={selectedRun} onClose={() => setReportOpen(false)} />}
