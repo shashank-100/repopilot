@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from typing import AsyncGenerator
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -20,19 +21,26 @@ def get_database_url() -> str | None:
 
 
 def _make_engine(url: str) -> AsyncEngine:
+    import re
+
     # Convert postgres:// → postgresql+asyncpg://
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgresql://") and "+asyncpg" not in url:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    # asyncpg doesn't accept libpq's ?sslmode= query param; strip it and
-    # pass ssl via connect_args instead. Managed Postgres (Supabase, etc.)
-    # requires TLS, so default to ssl=True when host is not local.
+    # Detect Supabase's transaction-mode pooler (pgbouncer). It does NOT
+    # support prepared statements, so asyncpg's statement cache must be off.
+    is_pooler = "pooler.supabase.com" in url or "pgbouncer=true" in url
+
+    # Strip query params asyncpg can't consume (sslmode, pgbouncer) — they are
+    # libpq/driver flags, not asyncpg connect kwargs.
+    url = re.sub(r"[?&]sslmode=[^&]*", "", url)
+    url = re.sub(r"[?&]pgbouncer=[^&]*", "", url)
+    url = re.sub(r"[?&]$", "", url)  # tidy trailing ? or &
+
     connect_args: dict[str, object] = {}
-    if "sslmode=" in url:
-        import re
-        url = re.sub(r"[?&]sslmode=[^&]*", "", url)
+
     if "localhost" not in url and "127.0.0.1" not in url:
         # Managed Postgres (Supabase) presents a chain Python doesn't trust by
         # default. Use an encrypted-but-unverified context — the host is fixed
@@ -42,6 +50,13 @@ def _make_engine(url: str) -> AsyncEngine:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         connect_args["ssl"] = ctx
+
+    if is_pooler:
+        # Disable prepared-statement caching for pgbouncer transaction mode.
+        connect_args["statement_cache_size"] = 0
+        # Unique-per-connection prepared statement names avoid collisions when
+        # the pooler reuses backend connections.
+        connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid4()}__"
 
     return create_async_engine(
         url, pool_pre_ping=True, echo=False, connect_args=connect_args
