@@ -84,6 +84,67 @@ discovery → knowledge → architecture → planning → implementation
 fast); reasoning agents that caused failures under Haiku (planning, reflection, PR)
 use Sonnet. Controlled by `default_llm()` / `heavy_llm()`.
 
+### 3a. What each agent does (in detail)
+
+The 9 agents fall into five phases of work:
+
+**Understand the repo (1–3)**
+1. **Discovery** — scans directory structure, detects framework + language, finds
+   entry points and key files. Writes `repository_map`.
+2. **Knowledge** — tree-sitter parses every source file into an AST and builds a
+   NetworkX graph of imports → classes → functions → routes. No LLM; pure static
+   analysis. Writes `repository_graph` (held in memory only — not JSON-serialisable).
+3. **Architecture** — queries the graph to identify API routes, data models,
+   services, and external dependencies. Writes `architecture_context`.
+
+**Decide what to do (4)**
+4. **Planning** — combines the objective with the repo map + architecture into an
+   ordered list of `ExecutionStep`s, each with `files_to_modify`, `tool_hints`, and
+   `depends_on`. Writes `execution_plan`. Uses Sonnet because a bad plan is the most
+   expensive failure (it causes scope-creep and repair loops).
+
+**Act (5)**
+5. **Implementation** — iterates the plan's steps. For each step it reads the
+   relevant files (cached so each file is embedded once — `_file_cache`/`_shown`),
+   asks the LLM for a structured `_StepResult` (`{summary, edits:[{path,content}]}`),
+   and applies each edit via the `fs.write_file` tool. Appends to `modified_files`.
+   A failed step is marked `failed` and the loop continues so validation sees the
+   whole picture.
+
+**Check & recover (6–7)**
+6. **Validation** — advisory, tiered (see §5). Writes `validation_results` with a
+   `severity` and `validated_with`. Never blocks.
+7. **Reflection** — only runs on a real, fixable test/lint failure. Reads the
+   validation findings + failed steps, diagnoses a root cause, and emits
+   `plan_patches` that the Planning agent applies on the next pass. Increments
+   `repair_attempts` (capped at 3).
+
+**Deliver (8–9)**
+8. **Documentation** — for each modified file, generates an updated module docstring
+   and a one-line migration note (Haiku, cheap). Stores notes for the PR.
+9. **PR Generation** — composes the PR (title, summary, changes, tests-executed,
+   risks, rollback) honestly reflecting the validation tier, then `github_pr.py`
+   opens a real GitHub PR. Writes `generated_pr` (incl. the PR `url`).
+
+### 3b. The agent contract
+
+Every agent is a class with one method — `run(state) -> state` — taking the LLM
+and tool executor at init:
+
+```python
+class SomeAgent:
+    def run(self, state: RepoPilotState) -> RepoPilotState:
+        x = state["..."]                 # 1. READ from shared state
+        result = invoke_with_retry(...)  # 2. REASON (LLM, structured output)
+        executor.run("fs.write_file",..) # 3. ACT (tools, via ToolExecutor)
+        state["..."] = result            # 4. WRITE back to state
+        return state
+```
+
+Agents **never call each other** — they communicate only through `RepoPilotState`.
+LLM responses are forced into Pydantic schemas via `.with_structured_output(...)`,
+so an agent gets typed objects, not raw text to parse.
+
 ---
 
 ## 4. The tool system
@@ -106,6 +167,40 @@ Plus `subagent.spawn_subgraph` — spawns a child LangGraph run in an **isolated
 **Dispatch is registry lookup, never conditionals.** `ToolExecutor`
 (`tools/executor.py`) wraps every call in an OpenTelemetry span and appends to
 `tool_history`.
+
+### 4a. How a tool is defined, registered, and called
+
+**1. Defined declaratively** — a Pydantic input schema + a decorated function that
+always returns the uniform `ToolOutput{success, data, error}`:
+
+```python
+class ReadFileInput(ToolInput):              # typed, validated args
+    path: str
+    start_line: int | None = None
+
+@tool("fs.read_file", "Read file contents…") # registers on import
+def read_file(inp: ReadFileInput) -> ToolOutput:
+    ...
+    return ToolOutput(success=True, data={"content": content})
+```
+
+**2. Auto-registered** — the `@tool` decorator reads the function's first-param
+annotation to capture the schema, then calls `registry.register(ToolMeta(...))`.
+Writing the file *is* the registration — no manual wiring.
+
+**3. Discovered** — `load_all_tools()` walks each namespace package with
+`pkgutil.iter_modules` and imports every module, firing all 50 decorators so the
+singleton `registry` is fully populated.
+
+**4. Invoked** — agents call `executor.run("fs.read_file", path="/x.py")`. The
+`ToolExecutor` looks the tool up, validates args against the Pydantic schema, opens
+an OTel span, runs it, records the call into `state["tool_history"]`, and returns the
+`ToolOutput`. Because failures return `success=False` (never raise), agents can chain
+tools without special-casing errors.
+
+This uniform `ToolInput`/`ToolOutput` shape is also what enables **composable tool
+I/O** — one tool's `data` is a valid input to another, and agents thread these
+results through `RepoPilotState`.
 
 ---
 
