@@ -124,3 +124,68 @@ def get_token(owner: str, repo: str) -> str | None:
         logger.info("github_auth.using_pat")
         return pat
     return None
+
+
+def list_accessible_repos() -> list[dict[str, str]]:
+    """List repos the GitHub App is installed on (or the PAT can see).
+
+    Returns a list of {full_name, default_branch, private} dicts. Empty if no
+    credentials are configured.
+    """
+    app_jwt = _app_jwt()
+    repos: list[dict[str, str]] = []
+
+    if app_jwt:
+        # Enumerate installations → mint token → list its repos
+        r = httpx.get(
+            f"{_GH_API}/app/installations",
+            headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
+            timeout=20,
+        )
+        if r.status_code == 200:
+            for inst in r.json():
+                tr = httpx.post(
+                    f"{_GH_API}/app/installations/{inst['id']}/access_tokens",
+                    headers={"Authorization": f"Bearer {app_jwt}", "Accept": "application/vnd.github+json"},
+                    timeout=20,
+                )
+                if tr.status_code != 201:
+                    continue
+                tok = tr.json()["token"]
+                page = 1
+                while True:
+                    rr = httpx.get(
+                        f"{_GH_API}/installation/repositories?per_page=100&page={page}",
+                        headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"},
+                        timeout=20,
+                    )
+                    if rr.status_code != 200:
+                        break
+                    batch = rr.json().get("repositories", [])
+                    for x in batch:
+                        repos.append({
+                            "full_name": x["full_name"],
+                            "default_branch": x.get("default_branch", "main"),
+                            "private": x.get("private", False),
+                        })
+                    if len(batch) < 100:
+                        break
+                    page += 1
+        return repos
+
+    # PAT fallback
+    pat = os.getenv("GITHUB_TOKEN")
+    if pat:
+        rr = httpx.get(
+            f"{_GH_API}/user/repos?per_page=100&sort=updated",
+            headers={"Authorization": f"Bearer {pat}", "Accept": "application/vnd.github+json"},
+            timeout=20,
+        )
+        if rr.status_code == 200:
+            for x in rr.json():
+                repos.append({
+                    "full_name": x["full_name"],
+                    "default_branch": x.get("default_branch", "main"),
+                    "private": x.get("private", False),
+                })
+    return repos

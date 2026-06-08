@@ -24,3 +24,16 @@ export async function createRun(objective: string, repo_path: string): Promise<{
   if (!r.ok) throw new Error("Failed to create run");
   return r.json();
 }
+
+export interface Repo {
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+}
+
+export async function listRepos(): Promise<Repo[]> {
+  const r = await fetch(`${BASE}/repos`, { cache: "no-store" });
+  if (!r.ok) return [];
+  const data = await r.json();
+  return (data.repos ?? []) as Repo[];
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listRuns, getRun, createRun } from "@/lib/api";
+import { listRuns, getRun, createRun, listRepos, type Repo } from "@/lib/api";
 import type { RunState, ToolCall } from "@/lib/types";
 
 // ─── design tokens ────────────────────────────────────────────────────────────
@@ -526,18 +526,35 @@ function ReportPanel({ runState, onClose }: { runState: RunState | null; onClose
 
 function NewRunModal({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   const [obj, setObj] = useState("");
-  // Pre-fill a public GitHub repo so the hosted demo works out of the box.
-  const [repo, setRepo] = useState("https://github.com/tiangolo/fastapi");
+  const [repo, setRepo] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  // Repo picker state
+  const [repos, setRepos] = useState<Repo[]>([]);
+  const [query, setQuery] = useState("");
+  const [showList, setShowList] = useState(false);
+  const [reposLoading, setReposLoading] = useState(true);
+
+  useEffect(() => {
+    listRepos()
+      .then(setRepos)
+      .finally(() => setReposLoading(false));
+  }, []);
+
+  const filtered = query.trim()
+    ? repos.filter(r => r.full_name.toLowerCase().includes(query.toLowerCase())).slice(0, 50)
+    : repos.slice(0, 50);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // repo comes from the dropdown selection, else from whatever was typed.
+    const chosen = (repo || query).trim();
     if (!obj.trim()) { setErr("Objective is required."); return; }
-    if (!repo.trim()) { setErr("Repository is required."); return; }
+    if (!chosen) { setErr("Pick a repository or paste a GitHub URL."); return; }
     setLoading(true); setErr("");
     try {
-      const { run_id } = await createRun(obj.trim(), repo.trim());
+      const { run_id } = await createRun(obj.trim(), chosen);
       onCreated(run_id);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to start run — is the API reachable?");
@@ -560,10 +577,47 @@ function NewRunModal({ onCreated, onClose }: { onCreated: (id: string) => void; 
           <span style={{ fontSize: 12, fontWeight: 500, color: C.textMid, display: "block", marginBottom: 5 }}>Objective</span>
           <input value={obj} onChange={e => setObj(e.target.value)} placeholder="e.g. migrate gradient text to #317CFF" style={inp} autoFocus />
         </label>
-        <label style={{ display: "block", marginBottom: 18 }}>
-          <span style={{ fontSize: 12, fontWeight: 500, color: C.textMid, display: "block", marginBottom: 5 }}>GitHub Repo or Path</span>
-          <input value={repo} onChange={e => setRepo(e.target.value)} placeholder="https://github.com/owner/repo" style={inp} />
-          <span style={{ fontSize: 11, color: C.textDim, display: "block", marginTop: 4 }}>Paste a public GitHub URL — it'll be cloned automatically.</span>
+        <label style={{ display: "block", marginBottom: 18, position: "relative" }}>
+          <span style={{ fontSize: 12, fontWeight: 500, color: C.textMid, display: "block", marginBottom: 5 }}>Repository</span>
+          <input
+            value={repo ? repo : query}
+            onChange={e => { setRepo(""); setQuery(e.target.value); setShowList(true); }}
+            onFocus={() => setShowList(true)}
+            placeholder={reposLoading ? "Loading your repos…" : repos.length ? "Search your repositories…" : "https://github.com/owner/repo"}
+            style={inp}
+          />
+          {repo && (
+            <button type="button" onClick={() => { setRepo(""); setQuery(""); setShowList(true); }}
+              style={{ position: "absolute", right: 8, top: 27, border: "none", background: "none", cursor: "pointer", color: C.textDim, fontSize: 14 }}>×</button>
+          )}
+          {/* dropdown */}
+          {showList && !repo && repos.length > 0 && (
+            <div style={{
+              position: "absolute", top: 56, left: 0, right: 0, zIndex: 10,
+              maxHeight: 200, overflowY: "auto",
+              background: C.bg, border: `1px solid ${C.borderMid}`, borderRadius: 8,
+              boxShadow: C.shadowMd,
+            }}>
+              {filtered.length === 0 && (
+                <p style={{ padding: "8px 12px", fontSize: 12, color: C.textDim }}>No matches — or paste a URL above</p>
+              )}
+              {filtered.map(r => (
+                <button key={r.full_name} type="button"
+                  onClick={() => { setRepo(`https://github.com/${r.full_name}`); setQuery(r.full_name); setShowList(false); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", border: "none", background: "none", padding: "7px 12px", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, color: C.text }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = C.bgHover}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "none"}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill={C.textDim}><path d="M2 2.5A2.5 2.5 0 014.5 0h8.75a.75.75 0 01.75.75v12.5a.75.75 0 01-.75.75h-2.5a.75.75 0 010-1.5h1.75v-2h-8a1 1 0 00-.714 1.7.75.75 0 01-1.072 1.05A2.495 2.495 0 012 11.5v-9z"/></svg>
+                  <span style={{ flex: 1 }}>{r.full_name}</span>
+                  {r.private && <span style={{ fontSize: 10, color: C.textDim, border: `1px solid ${C.border}`, borderRadius: 8, padding: "0 5px" }}>private</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          <span style={{ fontSize: 11, color: C.textDim, display: "block", marginTop: 4 }}>
+            {repos.length > 0 ? "Pick from your installed repos, or paste any public GitHub URL." : "Paste a public GitHub URL — it'll be cloned automatically."}
+          </span>
         </label>
         {err && <p style={{ color: C.red, fontSize: 12, marginBottom: 10 }}>{err}</p>}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
