@@ -297,9 +297,22 @@ function LiveThread({ run }: { run: RunState }) {
 
 // ─── chat thread ──────────────────────────────────────────────────────────────
 
-function ChatThread({ runState, onNewRun }: { runState: RunState | null; onNewRun: () => void }) {
+function ChatThread({ runState, onNewRun, onSend }: {
+  runState: RunState | null;
+  onNewRun: () => void;
+  onSend: (objective: string, repoPath: string) => void;
+}) {
   const title = runState ? runState.objective : "Migrate gradient text";
   const runId = runState ? runState.run_id.slice(0, 7) : "357";
+  const [draft, setDraft] = useState("");
+
+  function sendFollowUp() {
+    const text = draft.trim();
+    if (!text) return;
+    if (!runState) { onNewRun(); return; }   // no repo context → open the modal
+    onSend(text, runState.repo_path);         // re-run on the same repo
+    setDraft("");
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: C.bg }}>
@@ -336,10 +349,17 @@ function ChatThread({ runState, onNewRun }: { runState: RunState | null; onNewRu
       {/* input */}
       <div style={{ padding: "10px 16px 12px", borderTop: `1px solid ${C.border}`, flexShrink: 0, background: C.bg }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${C.borderMid}`, borderRadius: 12, padding: "9px 14px", background: C.bg, boxShadow: "0 0 0 3px rgba(0,0,0,0.03), " + C.shadow }}>
-          <button style={{ border: "none", background: "none", cursor: "pointer", color: C.textDim, fontSize: 17, lineHeight: 1, padding: 0 }}>+</button>
-          <input readOnly placeholder="Ask RepoPilot to build features, fix bugs, or work on your code" style={{ flex: 1, border: "none", outline: "none", fontSize: 13, color: C.textDim, background: "transparent", fontFamily: "inherit" }} />
-          <button style={{ border: "none", background: "none", cursor: "pointer", color: C.textDim, padding: 0, display: "flex", alignItems: "center" }}>
-            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke={C.textDim} strokeWidth="1.4"><path d="M8 1a3 3 0 013 3v4a3 3 0 01-6 0V4a3 3 0 013-3z"/><path d="M1 9s0 6 7 6 7-6 7-6"/><line x1="8" y1="15" x2="8" y2="12"/></svg>
+          <button onClick={onNewRun} title="New run" style={{ border: "none", background: "none", cursor: "pointer", color: C.textDim, fontSize: 17, lineHeight: 1, padding: 0 }}>+</button>
+          <input
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); sendFollowUp(); } }}
+            placeholder={runState ? "Send a follow-up task on this repo…" : "Start a run with + or the New Run button"}
+            style={{ flex: 1, border: "none", outline: "none", fontSize: 13, color: C.text, background: "transparent", fontFamily: "inherit" }}
+          />
+          <button onClick={sendFollowUp} disabled={!draft.trim()} title="Send"
+            style={{ border: "none", background: "none", cursor: draft.trim() ? "pointer" : "default", color: draft.trim() ? "#2da44e" : C.textDim, padding: 0, display: "flex", alignItems: "center" }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8L14 1.5 9.5 14.5 7 9 1.5 8z"/></svg>
           </button>
         </div>
       </div>
@@ -680,6 +700,16 @@ export function DashboardClient() {
     setShowModal(false);
   }, [refresh]);
 
+  // Follow-up from the chat input: start a new run on the same repo.
+  const handleSend = useCallback(async (objective: string, repoPath: string) => {
+    try {
+      const { run_id } = await createRun(objective, repoPath);
+      await refresh(run_id);
+      setSelectedRunId(run_id);
+      setSelectedSession(run_id);
+    } catch { /* surfaced by the run state */ }
+  }, [refresh]);
+
   // when a real run session is selected, show that run; otherwise demo
   const isRealSession = selectedSession !== "demo-1" || selectedRunId !== null;
 
@@ -704,7 +734,7 @@ export function DashboardClient() {
       />
 
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        <ChatThread runState={selectedRun} onNewRun={() => setShowModal(true)} />
+        <ChatThread runState={selectedRun} onNewRun={() => setShowModal(true)} onSend={handleSend} />
       </div>
 
       {reportOpen && <ReportPanel runState={selectedRun} onClose={() => setReportOpen(false)} />}

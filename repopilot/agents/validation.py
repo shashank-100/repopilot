@@ -134,17 +134,23 @@ class ValidationAgent:
 
         if _has_python_tests(repo):
             validated_with = "tests"
-            res = executor.run("terminal.run_pytest", repo_path=repo, args=[])
+            # Short timeout: validation is advisory. If a test suite hangs (e.g.
+            # a conftest that pip-installs on import), we don't wedge the run —
+            # we record the timeout as a finding and move on.
+            res = executor.run("terminal.run_pytest", repo_path=repo, args=[], timeout=45)
             rc = (res.data or {}).get("returncode")
             pytest_out = ((res.data or {}).get("stdout", "") + (res.data or {}).get("stderr", ""))[:4000]
             if rc in (0, 5):  # 5 = collected nothing
                 severity = "pass"
+            elif rc == 124:  # timed out (e.g. a conftest that installs deps)
+                severity = "warnings"
+                findings.append("test suite timed out — skipped (advisory)")
             else:
                 severity = "warnings"
                 findings.append(f"pytest reported failures (rc={rc})")
         elif _has_npm_test(repo):
             validated_with = "tests"
-            res = executor.run("terminal.run_command", command="npm test", cwd=repo, timeout=120)
+            res = executor.run("terminal.run_command", command="npm test", cwd=repo, timeout=45)
             out = ((res.data or {}).get("stdout", "") + (res.data or {}).get("stderr", ""))
             pytest_out = out[:4000]
             severity = "pass" if res.success else "warnings"
