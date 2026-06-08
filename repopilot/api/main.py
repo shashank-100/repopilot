@@ -63,13 +63,13 @@ app.include_router(runs.router)
 
 
 @app.get("/repos")
-async def list_repos() -> dict[str, list[dict[str, str]]]:
+async def list_repos() -> dict[str, list[dict[str, object]]]:
     """List GitHub repos the agent can open PRs on (App installations / PAT)."""
     import asyncio
 
     from repopilot.github_auth import list_accessible_repos
     repos = await asyncio.to_thread(list_accessible_repos)
-    return {"repos": sorted(repos, key=lambda r: r["full_name"].lower())}
+    return {"repos": sorted(repos, key=lambda r: str(r["full_name"]).lower())}
 
 
 @app.get("/", include_in_schema=False)
