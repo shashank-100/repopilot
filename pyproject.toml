@@ -1,0 +1,74 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "repopilot"
+version = "0.1.0"
+description = "Autonomous AI coding agent built on LangGraph + LangChain"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.30",
+    "langgraph>=0.2",
+    "langchain>=0.3",
+    "langchain-anthropic>=0.3",
+    "anthropic>=0.40",
+    "pydantic>=2.7",
+    "structlog>=24.1",
+    "opentelemetry-sdk>=1.25",
+    "opentelemetry-exporter-otlp>=1.25",
+    "opentelemetry-instrumentation-fastapi>=0.46b0",
+    "tenacity>=8.3",
+    "aiolimiter>=1.1",
+    "tree-sitter>=0.23",
+    "tree-sitter-python>=0.23",
+    "networkx>=3.3",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "sqlalchemy[asyncio]>=2.0.50",
+    "asyncpg>=0.31.0",
+    "alembic>=1.18.4",
+    "slowapi>=0.1.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx>=0.27",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["repopilot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tree_sitter.*", "networkx.*", "langgraph.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+]

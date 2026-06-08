@@ -1,0 +1,33 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: repopilot
+      POSTGRES_PASSWORD: repopilot
+      POSTGRES_DB: repopilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repopilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://repopilot:repopilot@postgres:5432/repopilot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./repopilot:/app/repopilot
+    restart: unless-stopped
+
+volumes:
+  pg_data:

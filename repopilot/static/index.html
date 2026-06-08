@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>RepoPilot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Syne:wght@400;600;800&display=swap" rel="stylesheet" />
+<style>
+/* ─── tokens ────────────────────────────────────────────────────── */
+:root {
+  --bg:        #080a0c;
+  --bg-panel:  #0d1117;
+  --bg-hover:  #111820;
+  --bg-input:  #0b1019;
+  --border:    #1c2633;
+  --border-hi: #243040;
+  --green:     #00ff88;
+  --green-dim: #00cc6a;
+  --green-faint:#00ff881a;
+  --amber:     #f59e0b;
+  --red:       #f87171;
+  --blue:      #60a5fa;
+  --purple:    #a78bfa;
+  --text:      #c9d1d9;
+  --text-dim:  #6b7280;
+  --text-faint:#3d4f63;
+  --mono:      'JetBrains Mono', monospace;
+  --sans:      'Syne', sans-serif;
+  --radius:    4px;
+  --sidebar-w: 300px;
+}
+
+/* ─── reset ─────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* scanline overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,.08) 2px,
+    rgba(0,0,0,.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── layout ────────────────────────────────────────────────────── */
+#app { display: flex; height: 100vh; }
+
+/* ─── topbar ────────────────────────────────────────────────────── */
+#topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 44px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px;
+  z-index: 100;
+}
+#topbar .logo {
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -.3px;
+  color: #fff;
+}
+#topbar .logo span { color: var(--green); }
+#topbar .pulse-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes blink {
+  0%,100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+#topbar .sep { flex: 1; }
+#topbar .meta { color: var(--text-dim); font-size: 11px; }
+
+/* ─── new-run button ────────────────────────────────────────────── */
+#btn-new-run {
+  background: var(--green-faint);
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+#btn-new-run:hover {
+  background: rgba(0,255,136,.15);
+  box-shadow: 0 0 12px rgba(0,255,136,.2);
+}
+
+/* ─── sidebar ───────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  height: 100vh;
+  padding-top: 44px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+#sidebar-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+#sidebar-header h2 {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+#run-count {
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--border);
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+#run-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+#run-list::-webkit-scrollbar { width: 4px; }
+#run-list::-webkit-scrollbar-track { background: transparent; }
+#run-list::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+.run-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background .1s, border-color .1s;
+  position: relative;
+}
+.run-item:hover { background: var(--bg-hover); }
+.run-item.active {
+  background: var(--bg-hover);
+  border-left-color: var(--green);
+}
+.run-item .run-id {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  margin-bottom: 3px;
+}
+.run-item .run-obj {
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-item .run-phase {
+  margin-top: 5px;
+  display: flex; align-items: center; gap: 6px;
+}
+.phase-badge {
+  font-size: 9px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.phase-badge.running { background: rgba(0,255,136,.12); color: var(--green); }
+.phase-badge.done    { background: rgba(96,165,250,.12); color: var(--blue); }
+.phase-badge.error   { background: rgba(248,113,113,.12); color: var(--red); }
+.phase-badge.created { background: rgba(107,114,128,.12); color: var(--text-dim); }
+
+/* ─── main content ──────────────────────────────────────────────── */
+#main {
+  flex: 1;
+  height: 100vh;
+  padding-top: 44px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── empty state ───────────────────────────────────────────────── */
+#empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-faint);
+}
+#empty-state .big-icon {
+  font-size: 48px;
+  opacity: .4;
+}
+#empty-state p {
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+#empty-state small { font-size: 11px; }
+
+/* ─── run detail ────────────────────────────────────────────────── */
+#run-detail { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#detail-hidden { display: none; }
+
+/* detail header */
+#detail-header {
+  padding: 16px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 12px;
+}
+#detail-header .obj-title {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 17px;
+  color: #fff;
+  flex: 1;
+  line-height: 1.3;
+}
+#detail-header .run-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+#detail-header .run-meta span { color: var(--text-faint); }
+
+/* repair badge */
+.repair-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: rgba(245,158,11,.1);
+  color: var(--amber);
+  border: 1px solid rgba(245,158,11,.2);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ─── phase pipeline ────────────────────────────────────────────── */
+#pipeline-wrap {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+#pipeline-wrap::-webkit-scrollbar { height: 4px; }
+#pipeline-wrap::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+#pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: max-content;
+}
+
+.pipe-node {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  position: relative;
+}
+.pipe-node + .pipe-node::before {
+  content: '';
+  position: absolute;
+  left: -28px; top: 14px;
+  width: 28px; height: 1px;
+  background: var(--border);
+}
+.pipe-node + .pipe-node.done::before,
+.pipe-node + .pipe-node.active::before {
+  background: var(--green-dim);
+}
+
+.pipe-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-hi);
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  color: var(--text-faint);
+  transition: all .3s;
+  position: relative;
+  z-index: 1;
+  margin: 0 14px;
+}
+.pipe-dot.done {
+  border-color: var(--green-dim);
+  background: rgba(0,255,136,.08);
+  color: var(--green);
+}
+.pipe-dot.active {
+  border-color: var(--green);
+  background: rgba(0,255,136,.15);
+  color: var(--green);
+  box-shadow: 0 0 16px rgba(0,255,136,.35);
+  animation: node-pulse 1.5s ease-in-out infinite;
+}
+.pipe-dot.failed {
+  border-color: var(--red);
+  background: rgba(248,113,113,.08);
+  color: var(--red);
+}
+@keyframes node-pulse {
+  0%,100% { box-shadow: 0 0 10px rgba(0,255,136,.3); }
+  50%      { box-shadow: 0 0 22px rgba(0,255,136,.6); }
+}
+
+.pipe-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  transition: color .3s;
+}
+.pipe-node.done   .pipe-label { color: var(--green-dim); }
+.pipe-node.active .pipe-label { color: var(--green); }
+.pipe-node.failed .pipe-label { color: var(--red); }
+
+/* ─── content panels (3-column grid) ────────────────────────────── */
+#panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.panel-header {
+  padding: 8px 14px 7px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.panel-title {
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.panel-count {
+  font-size: 10px;
+  color: var(--text-faint);
+  background: var(--border);
+  padding: 0 5px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0;
+  min-height: 0;
+}
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
+
+/* ─── observations log ──────────────────────────────────────────── */
+.obs-line {
+  padding: 2px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex; gap: 10px;
+  align-items: baseline;
+  animation: fade-in .3s ease;
+}
+.obs-line:hover { background: var(--bg-hover); }
+.obs-idx {
+  color: var(--text-faint);
+  font-size: 10px;
+  min-width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.obs-text { flex: 1; word-break: break-word; }
+.obs-text.highlight { color: var(--green); }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ─── tool history ──────────────────────────────────────────────── */
+.tool-row {
+  padding: 5px 14px;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(255,255,255,.025);
+  animation: fade-in .25s ease;
+  cursor: pointer;
+  transition: background .1s;
+}
+.tool-row:hover { background: var(--bg-hover); }
+.tool-name {
+  color: var(--green-dim);
+  white-space: nowrap;
+}
+.tool-args {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-dur {
+  color: var(--text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.tool-ok   { color: var(--green); font-size: 10px; }
+.tool-fail { color: var(--red);   font-size: 10px; }
+
+/* ─── modified files ────────────────────────────────────────────── */
+.file-row {
+  padding: 5px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px;
+  animation: fade-in .25s ease;
+}
+.file-icon { color: var(--blue); flex-shrink: 0; }
+.file-path { color: var(--text); word-break: break-all; }
+
+/* ─── PR summary ────────────────────────────────────────────────── */
+#pr-panel { grid-column: 1 / -1; }
+
+.pr-body {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pr-title-row {
+  display: flex; align-items: center; gap: 10px;
+}
+.pr-title-text {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+}
+.pr-tag {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid;
+}
+.pr-tag.merged { border-color: var(--purple); color: var(--purple); background: rgba(167,139,250,.07); }
+.pr-tag.ready  { border-color: var(--green);  color: var(--green);  background: var(--green-faint); }
+
+.pr-summary { color: var(--text-dim); font-size: 12px; line-height: 1.7; }
+
+.pr-section-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+.pr-list {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pr-list li {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex; gap: 6px;
+}
+.pr-list li::before { content: '→'; color: var(--text-faint); flex-shrink: 0; }
+.pr-list.risks li::before { content: '⚠'; color: var(--amber); }
+.pr-list.tests li::before { content: '✓'; color: var(--green); }
+
+.pr-rollback {
+  padding: 10px 12px;
+  background: rgba(248,113,113,.05);
+  border: 1px solid rgba(248,113,113,.15);
+  border-radius: var(--radius);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.pr-rollback strong { color: var(--red); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+
+.pr-cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+/* empty panel */
+.panel-empty {
+  padding: 20px 14px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ─── new-run modal ─────────────────────────────────────────────── */
+#modal-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.7);
+  z-index: 200;
+  align-items: center; justify-content: center;
+}
+#modal-backdrop.open { display: flex; }
+
+#modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  width: 480px;
+  padding: 24px;
+  box-shadow: 0 32px 80px rgba(0,0,0,.6);
+}
+#modal h3 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+  margin-bottom: 18px;
+}
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.form-input:focus {
+  border-color: var(--green-dim);
+  box-shadow: 0 0 0 2px rgba(0,255,136,.1);
+}
+.modal-actions {
+  display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px;
+}
+.btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border-hi);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .15s;
+}
+.btn-cancel:hover { background: var(--bg-hover); }
+.btn-submit {
+  background: var(--green-faint);
+  border: 1px solid var(--green-dim);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 7px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .15s, box-shadow .15s;
+}
+.btn-submit:hover { background: rgba(0,255,136,.15); box-shadow: 0 0 12px rgba(0,255,136,.2); }
+.btn-submit:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ─── toast ─────────────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 20px; right: 20px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  color: var(--text);
+  font-size: 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+  z-index: 999;
+  transform: translateY(80px);
+  opacity: 0;
+  transition: transform .25s ease, opacity .25s ease;
+  pointer-events: none;
+}
+#toast.show {
+  transform: none;
+  opacity: 1;
+}
+#toast.ok   { border-color: var(--green-dim); color: var(--green); }
+#toast.err  { border-color: var(--red);       color: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- topbar -->
+<div id="topbar">
+  <div class="logo">Repo<span>Pilot</span></div>
+  <div class="pulse-dot" id="pulse-dot"></div>
+  <div class="sep"></div>
+  <span class="meta" id="topbar-meta">no run selected</span>
+  <button id="btn-new-run" onclick="openModal()">+ New Run</button>
+</div>
+
+<!-- layout -->
+<div id="app">
+
+  <!-- sidebar -->
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <h2>Runs</h2>
+      <span id="run-count">0</span>
+    </div>
+    <div id="run-list"></div>
+  </aside>
+
+  <!-- main -->
+  <main id="main">
+
+    <!-- empty state -->
+    <div id="empty-state">
+      <div class="big-icon">⬡</div>
+      <p>No run selected</p>
+      <small>Pick a run from the sidebar or start a new one</small>
+    </div>
+
+    <!-- run detail (hidden until a run is selected) -->
+    <div id="run-detail" style="display:none; flex:1; flex-direction:column; overflow:hidden;">
+
+      <!-- header -->
+      <div id="detail-header">
+        <div style="flex:1">
+          <div class="obj-title" id="dh-obj">—</div>
+          <div class="run-meta">
+            run <span id="dh-id">—</span> &nbsp;·&nbsp; repo <span id="dh-repo">—</span>
+          </div>
+        </div>
+        <div id="dh-repair" class="repair-badge" style="display:none">⟳ repair attempt <span id="dh-repair-n">0</span></div>
+      </div>
+
+      <!-- phase pipeline -->
+      <div id="pipeline-wrap">
+        <div id="pipeline"></div>
+      </div>
+
+      <!-- panels -->
+      <div id="panels">
+        <!-- observations -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Observations</span>
+            <span class="panel-count" id="obs-count">0</span>
+          </div>
+          <div class="panel-body" id="obs-body"></div>
+        </div>
+
+        <!-- tool history -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Tool Calls</span>
+            <span class="panel-count" id="tool-count">0</span>
+          </div>
+          <div class="panel-body" id="tool-body"></div>
+        </div>
+
+        <!-- modified files -->
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Modified Files</span>
+            <span class="panel-count" id="files-count">0</span>
+          </div>
+          <div class="panel-body" id="files-body"></div>
+        </div>
+
+        <!-- PR summary (spans full width) -->
+        <div class="panel" id="pr-panel">
+          <div class="panel-header">
+            <span class="panel-title">Pull Request</span>
+          </div>
+          <div class="panel-body" id="pr-body">
+            <p class="panel-empty">PR will appear when the run completes.</p>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /run-detail -->
+  </main>
+</div>
+
+<!-- new-run modal -->
+<div id="modal-backdrop">
+  <div id="modal">
+    <h3>New Run</h3>
+    <div class="form-group">
+      <label class="form-label" for="inp-obj">Objective</label>
+      <input class="form-input" id="inp-obj" type="text" placeholder="e.g. add rate limiting middleware" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="inp-repo">Repository Path</label>
+      <input class="form-input" id="inp-repo" type="text" placeholder="/absolute/path/to/repo" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-submit" id="btn-submit" onclick="submitRun()">Launch →</button>
+    </div>
+  </div>
+</div>
+
+<!-- toast -->
+<div id="toast"></div>
+
+<script>
+/* ================================================================
+   STATE
+================================================================ */
+const PHASES = [
+  'discovery','knowledge','architecture','planning',
+  'implementation','validation','reflection','documentation','pr_generation'
+];
+const PHASE_ICONS = {
+  discovery:'◎', knowledge:'◈', architecture:'⬡', planning:'◆',
+  implementation:'◐', validation:'◉', reflection:'↺',
+  documentation:'◇', pr_generation:'✦'
+};
+
+let runs = {};          // run_id → state snapshot
+let selectedId = null;
+let pollTimer = null;
+let listTimer = null;
+let prevToolCount = 0;
+let prevObsCount  = 0;
+
+/* ================================================================
+   INIT
+================================================================ */
+document.addEventListener('DOMContentLoaded', () => {
+  fetchRunList();
+  listTimer = setInterval(fetchRunList, 3000);
+  // keyboard: Escape closes modal
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+});
+
+/* ================================================================
+   API HELPERS
+================================================================ */
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+/* ================================================================
+   RUN LIST
+================================================================ */
+async function fetchRunList() {
+  try {
+    const { run_ids } = await api('/runs');
+    // fetch any new runs we haven't seen
+    const newIds = run_ids.filter(id => !runs[id]);
+    await Promise.all(newIds.map(fetchRunDetail));
+    document.getElementById('run-count').textContent = run_ids.length;
+    renderSidebar(run_ids);
+  } catch(e) { /* server not up yet */ }
+}
+
+/* ================================================================
+   RUN DETAIL
+================================================================ */
+async function fetchRunDetail(id) {
+  try {
+    const state = await api(`/runs/${id}`);
+    runs[id] = state;
+    if (selectedId === id) renderDetail(state);
+    return state;
+  } catch(e) { return null; }
+}
+
+function selectRun(id) {
+  selectedId = id;
+  clearInterval(pollTimer);
+  renderDetail(runs[id]);
+  prevToolCount = 0;
+  prevObsCount  = 0;
+
+  const pollPhase = () => runs[id]?.current_phase;
+  pollTimer = setInterval(async () => {
+    await fetchRunDetail(id);
+    const phase = pollPhase();
+    if (phase === 'pr_generation' || phase === 'error') {
+      clearInterval(pollTimer);
+      updatePulseDot(false);
+    }
+  }, 2000);
+
+  updatePulseDot(true);
+  renderSidebar(Object.keys(runs));
+}
+
+/* ================================================================
+   RENDER SIDEBAR
+================================================================ */
+function renderSidebar(ids) {
+  const list = document.getElementById('run-list');
+  // preserve scroll
+  const scrollTop = list.scrollTop;
+
+  list.innerHTML = ids.slice().reverse().map(id => {
+    const s = runs[id] || {};
+    const phase = s.current_phase || 'created';
+    const cls = phase === 'pr_generation' ? 'done'
+              : phase === 'error'         ? 'error'
+              : phase === 'created'       ? 'created'
+              : 'running';
+    const active = id === selectedId ? 'active' : '';
+    return `<div class="run-item ${active}" onclick="selectRun('${id}')">
+      <div class="run-id">${id.slice(0,8)}…</div>
+      <div class="run-obj">${esc(s.objective || '(unknown)')}</div>
+      <div class="run-phase">
+        <span class="phase-badge ${cls}">${phase.replace('_',' ')}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.scrollTop = scrollTop;
+}
+
+/* ================================================================
+   RENDER DETAIL
+================================================================ */
+function renderDetail(s) {
+  if (!s) return;
+
+  document.getElementById('empty-state').style.display = 'none';
+  const det = document.getElementById('run-detail');
+  det.style.display = 'flex';
+
+  // header
+  document.getElementById('dh-obj').textContent  = s.objective || '—';
+  document.getElementById('dh-id').textContent   = (s.run_id || '').slice(0, 8) + '…';
+  document.getElementById('dh-repo').textContent = s.repo_path || '—';
+  document.getElementById('topbar-meta').textContent =
+    `${s.current_phase || '—'} · repairs: ${s.repair_attempts || 0}`;
+
+  const repairEl = document.getElementById('dh-repair');
+  if (s.repair_attempts > 0) {
+    repairEl.style.display = 'inline-flex';
+    document.getElementById('dh-repair-n').textContent = s.repair_attempts;
+  } else {
+    repairEl.style.display = 'none';
+  }
+
+  // pipeline
+  renderPipeline(s.current_phase || 'created');
+
+  // observations
+  renderObservations(s.observations || []);
+
+  // tool history
+  renderTools(s.tool_history || []);
+
+  // modified files
+  renderFiles(s.modified_files || []);
+
+  // PR
+  renderPR(s.generated_pr);
+}
+
+/* ================================================================
+   PIPELINE
+================================================================ */
+function renderPipeline(currentPhase) {
+  const doneIdx   = PHASES.indexOf(currentPhase);
+  const container = document.getElementById('pipeline');
+  container.innerHTML = PHASES.map((p, i) => {
+    let cls = 'pending';
+    if (i < doneIdx)  cls = 'done';
+    if (i === doneIdx) cls = currentPhase === 'error' ? 'failed' : 'active';
+    return `<div class="pipe-node ${cls}">
+      <div class="pipe-dot ${cls}">${PHASE_ICONS[p] || '○'}</div>
+      <div class="pipe-label">${p.replace('_','​')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ================================================================
+   OBSERVATIONS
+================================================================ */
+function renderObservations(obs) {
+  const body  = document.getElementById('obs-body');
+  const count = document.getElementById('obs-count');
+  count.textContent = obs.length;
+
+  const startIdx = prevObsCount;
+  const newObs   = obs.slice(startIdx);
+  prevObsCount   = obs.length;
+
+  if (startIdx === 0) body.innerHTML = '';
+
+  newObs.forEach((line, i) => {
+    const el = document.createElement('div');
+    el.className = 'obs-line';
+    const idx = startIdx + i + 1;
+    const isHighlight = /^(discovery|architecture|planning|validation|reflection|pr_generation|implementation|documentation):/i.test(line);
+    el.innerHTML = `<span class="obs-idx">${idx}</span>
+      <span class="obs-text ${isHighlight ? 'highlight' : ''}">${esc(line)}</span>`;
+    body.appendChild(el);
+  });
+
+  if (newObs.length > 0) body.scrollTop = body.scrollHeight;
+}
+
+/* ================================================================
+   TOOL HISTORY
+================================================================ */
+function renderTools(tools) {
+  const body  = document.getElementById('tool-body');
+  const count = document.getElementById('tool-count');
+  count.textContent = tools.length;
+
+  const startIdx = prevToolCount;
+  const newTools = tools.slice(startIdx);
+  prevToolCount  = tools.length;
+
+  if (startIdx === 0) body.innerHTML = '';
+
+  newTools.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'tool-row';
+    const args = JSON.stringify(t.args || {});
+    const shortArgs = args.length > 60 ? args.slice(0, 60) + '…' : args;
+    const dur   = t.duration_ms != null ? `${Math.round(t.duration_ms)}ms` : '';
+    const ok    = t.success ? `<span class="tool-ok">✓</span>` : `<span class="tool-fail">✗</span>`;
+    el.innerHTML = `
+      <span class="tool-name">${esc(t.tool_name)}</span>
+      <span class="tool-args">${esc(shortArgs)}</span>
+      <span class="tool-dur">${dur}</span>
+      ${ok}`;
+    el.title = JSON.stringify(t, null, 2);
+    body.appendChild(el);
+  });
+
+  if (newTools.length > 0) body.scrollTop = body.scrollHeight;
+}
+
+/* ================================================================
+   MODIFIED FILES
+================================================================ */
+function renderFiles(files) {
+  const body  = document.getElementById('files-body');
+  const count = document.getElementById('files-count');
+  count.textContent = files.length;
+
+  if (files.length === 0) {
+    body.innerHTML = '<p class="panel-empty">No files modified yet.</p>';
+    return;
+  }
+  body.innerHTML = files.map(f =>
+    `<div class="file-row">
+       <span class="file-icon">◈</span>
+       <span class="file-path">${esc(f)}</span>
+     </div>`
+  ).join('');
+}
+
+/* ================================================================
+   PR SUMMARY
+================================================================ */
+function renderPR(pr) {
+  const body = document.getElementById('pr-body');
+  if (!pr || !pr.title) {
+    body.innerHTML = '<p class="panel-empty">PR will appear when the run completes.</p>';
+    return;
+  }
+  body.innerHTML = `<div class="pr-body">
+    <div class="pr-title-row">
+      <span class="pr-title-text">${esc(pr.title)}</span>
+      <span class="pr-tag ready">ready to merge</span>
+    </div>
+    <p class="pr-summary">${esc(pr.summary)}</p>
+    <div class="pr-cols">
+      <div>
+        <div class="pr-section-label">Changes</div>
+        <ul class="pr-list">${(pr.changes||[]).map(c=>`<li>${esc(c)}</li>`).join('')}</ul>
+      </div>
+      <div>
+        <div class="pr-section-label">Tests Executed</div>
+        <ul class="pr-list tests">${(pr.tests_executed||[]).map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+      </div>
+      <div>
+        <div class="pr-section-label">Risks</div>
+        <ul class="pr-list risks">${(pr.risks||[]).map(r=>`<li>${esc(r)}</li>`).join('')}</ul>
+      </div>
+    </div>
+    <div class="pr-rollback">
+      <strong>Rollback Plan</strong>
+      ${esc(pr.rollback_plan||'—')}
+    </div>
+  </div>`;
+}
+
+/* ================================================================
+   MODAL
+================================================================ */
+function openModal() {
+  document.getElementById('modal-backdrop').classList.add('open');
+  document.getElementById('inp-obj').focus();
+}
+function closeModal() {
+  document.getElementById('modal-backdrop').classList.remove('open');
+}
+async function submitRun() {
+  const obj  = document.getElementById('inp-obj').value.trim();
+  const repo = document.getElementById('inp-repo').value.trim();
+  if (!obj || !repo) { toast('Fill in both fields', 'err'); return; }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.textContent = 'Launching…';
+
+  try {
+    const { run_id } = await api('/runs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ objective: obj, repo_path: repo }),
+    });
+    closeModal();
+    document.getElementById('inp-obj').value  = '';
+    document.getElementById('inp-repo').value = '';
+    toast(`Run ${run_id.slice(0,8)} started`, 'ok');
+    await fetchRunDetail(run_id);
+    renderSidebar(Object.keys(runs));
+    selectRun(run_id);
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Launch →';
+  }
+}
+
+/* ================================================================
+   PULSE DOT
+================================================================ */
+function updatePulseDot(active) {
+  const dot = document.getElementById('pulse-dot');
+  dot.style.background = active ? 'var(--green)' : 'var(--text-faint)';
+  dot.style.boxShadow  = active ? '0 0 8px var(--green)' : 'none';
+  dot.style.animation  = active ? 'blink 2s ease-in-out infinite' : 'none';
+}
+
+/* ================================================================
+   TOAST
+================================================================ */
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+/* ================================================================
+   UTIL
+================================================================ */
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

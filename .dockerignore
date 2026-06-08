@@ -1,0 +1,21 @@
+# Frontend — deployed separately on Vercel
+dashboard/
+
+# Dev/test artifacts
+tests/
+benchmarks/
+.pytest_cache/
+**/__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+
+# Local env & secrets — set these in Railway's dashboard
+.env
+.env.local
+
+# Docs & misc
+*.md
+.git/
+alembic/
+benchmark_report.*

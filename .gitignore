@@ -1,0 +1,39 @@
+# Secrets — NEVER commit
+.env
+.env.local
+.env.*.local
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# uv
+# (keep uv.lock — it pins deps for reproducible Docker builds)
+
+# Node / Next.js (dashboard)
+dashboard/node_modules/
+dashboard/.next/
+dashboard/out/
+dashboard/.env.local
+dashboard/.vercel/
+
+# Eval artifacts
+benchmark_report.json
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local run logs
+*.log
