@@ -1,19 +1,26 @@
-"""State store — transparent in-memory or PostgreSQL backend.
+"""State store — PostgreSQL with transparent in-memory fallback.
 
-When DATABASE_URL is set the module delegates to repopilot.db.store (async
-SQLAlchemy + asyncpg). Otherwise it falls back to the in-memory dict.
-The public API is identical in both cases so no other module needs to change.
+When DATABASE_URL is set the store writes through to PostgreSQL (via
+repopilot.db.store). Every run is ALSO mirrored in an in-memory dict, so if a
+DB operation fails (e.g. the database is unreachable from this host) the API
+degrades gracefully to in-memory instead of returning 500s. Without
+DATABASE_URL it is purely in-memory.
+
+The public API is identical in all cases so no other module needs to change.
 """
 from __future__ import annotations
 
 import os
 import uuid
-from typing import TYPE_CHECKING
 
+import structlog
+
+from repopilot.errors import PersistenceError
 from repopilot.state import RepoPilotState
 
-# ── in-memory fallback ────────────────────────────────────────────────────────
+logger = structlog.get_logger(__name__)
 
+# In-memory mirror — always populated, used as the fallback path.
 _store: dict[str, RepoPilotState] = {}
 
 _USE_DB = bool(os.getenv("DATABASE_URL"))
@@ -42,36 +49,50 @@ def create_run(objective: str, repo_path: str) -> RepoPilotState:
         "repair_attempts": 0,
         "current_phase": "created",
     }
+    _store[run_id] = state  # always mirror in memory
     if _USE_DB:
-        create_run_db(objective, repo_path, state)
-    else:
-        _store[run_id] = state
+        try:
+            create_run_db(objective, repo_path, state)
+        except PersistenceError as exc:
+            logger.warning("state_store.db_fallback", op="create", error=str(exc))
     return state
 
 
 def get_run(run_id: str) -> RepoPilotState:
     if _USE_DB:
-        return get_run_db(run_id)
+        try:
+            return get_run_db(run_id)
+        except KeyError:
+            raise
+        except PersistenceError as exc:
+            logger.warning("state_store.db_fallback", op="get", error=str(exc))
     if run_id not in _store:
         raise KeyError(f"run {run_id!r} not found")
     return _store[run_id]
 
 
 def update_run(state: RepoPilotState) -> None:
+    _store[state["run_id"]] = state  # always mirror
     if _USE_DB:
-        update_run_db(state)
-    else:
-        _store[state["run_id"]] = state
+        try:
+            update_run_db(state)
+        except PersistenceError as exc:
+            logger.warning("state_store.db_fallback", op="update", error=str(exc))
 
 
-def list_runs(self=None) -> list[str] | "KeysView[str]":  # type: ignore[return]
+def list_runs() -> list[str]:
     if _USE_DB:
-        return list_runs_db()
-    return _store.keys()
+        try:
+            return list_runs_db()
+        except PersistenceError as exc:
+            logger.warning("state_store.db_fallback", op="list", error=str(exc))
+    return list(_store.keys())
 
 
 def delete_run(run_id: str) -> None:
+    _store.pop(run_id, None)
     if _USE_DB:
-        delete_run_db(run_id)
-    else:
-        _store.pop(run_id, None)
+        try:
+            delete_run_db(run_id)
+        except PersistenceError as exc:
+            logger.warning("state_store.db_fallback", op="delete", error=str(exc))
